@@ -2,9 +2,11 @@ using AspNetCoreDemo.Dependencies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using System;
+using System.Threading.Tasks;
 
 namespace AspNetCoreDemo
 {
@@ -30,14 +32,38 @@ namespace AspNetCoreDemo
             services.AddControllers();
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app)
         {
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
+            app.UseHttpsRedirection();
 
             app.UseRouting();
+
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
+        }
+
+        public void ConfigureDevelopment(IApplicationBuilder app)
+        {
+            app.UseDeveloperExceptionPage();
+
+            app.UseRouting();
+
+            app.MapWhen(context => context.Request.Query.ContainsKey("mapWhenProp"), HandleBranch);
+
+            app.Use(next => context =>
+            {
+                var endpoint = context.GetEndpoint();
+                if (endpoint is null)
+                {
+                    return next(context);
+                }
+
+                Console.WriteLine($"Endpoint: {endpoint.DisplayName}");
+
+                return next(context);
+            });
 
             app.UseEndpoints(endpoints =>
             {
@@ -51,6 +77,15 @@ namespace AspNetCoreDemo
 
                     await context.Response.WriteAsync($"SomeVariable: {Configuration["SomeVariable"]}\nDefault user: {defaultUserOptions.Name} - {defaultUserOptions.Title}");
                 });
+            });
+        }
+
+        private static void HandleBranch(IApplicationBuilder app)
+        {
+            app.Run(async context =>
+            {
+                var mapWhenProp = context.Request.Query["mapWhenProp"];
+                await context.Response.WriteAsync($"{mapWhenProp}");
             });
         }
     }
